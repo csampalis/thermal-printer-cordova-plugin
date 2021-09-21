@@ -60,6 +60,8 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
                     ThermalPrinterCordovaPlugin.this.requestUSBPermissions(callbackContext, args.getJSONObject(0));
                 } else if (action.equals("bitmapToHexadecimalString")) {
                     ThermalPrinterCordovaPlugin.this.bitmapToHexadecimalString(callbackContext, args.getJSONObject(0));
+                } else if (action.equals("printImage")) {
+                    ThermalPrinterCordovaPlugin.this.printImage(callbackContext, action, args.getJSONObject(0));
                 }
             } catch (JSONException exception) {
                 callbackContext.error(exception.getMessage());
@@ -200,7 +202,7 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
                 ? printer.mmToPx((float) data.getDouble("mmFeedPaper"))
                 : data.optInt("dotsFeedPaper", 20);
            
-		    byte[] decodedString = Base64.decode(receipt, Base64.DEFAULT);
+		    byte[] decodedString = Base64.decode(data.optString("text"), Base64.DEFAULT);
             Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
 			decodedByte = scaleBitmap(decodedByte,data.optInt("printerDpi",203),data.optInt("printerWidthMM",60));
 			int width = decodedByte.getWidth(), height = decodedByte.getHeight();
@@ -394,10 +396,10 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         return true;
     }
 	
-	private Bitmap scaleBitmap(Bitmap bm,int dpi, int paperMM) {
+	private Bitmap scaleBitmap(Bitmap bm,int dpi, double paperMM) {
 		int width = bm.getWidth();
 		int height = bm.getHeight();
-		int newWidth = dpi * (paperMM / 10) / 2.54;
+		int newWidth =(int) (dpi * (paperMM / 10) / 2.54);
 		//Log.v("Pictures", "Width and height are " + width + "--" + height);
 		float ratio = newWidth / width;
 		
