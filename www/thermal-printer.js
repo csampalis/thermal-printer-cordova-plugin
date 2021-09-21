@@ -81,7 +81,7 @@ module.exports = {
    * @param {function} successCallback - Result on success
    * @param {function} errorCallback - Result on failure
    */
-  printFormattedText: function(data, successCallback, errorCallback) {
+  printImage: function(data, successCallback, errorCallback) {
     cordova.exec(successCallback, errorCallback, 'ThermalPrinter', 'printImage', [data]);
   },
 
