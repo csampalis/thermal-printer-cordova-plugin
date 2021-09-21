@@ -192,6 +192,36 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
 
         callbackContext.success(printers);
     }
+	
+	 private void printImage(CallbackContext callbackContext, String action, JSONObject data) throws JSONException {
+        EscPosPrinter printer = this.getPrinter(callbackContext, data);
+        try {
+            int dotsFeedPaper = data.has("mmFeedPaper")
+                ? printer.mmToPx((float) data.getDouble("mmFeedPaper"))
+                : data.optInt("dotsFeedPaper", 20);
+           
+		    byte[] decodedString = Base64.decode(receipt, Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+			decodedByte = scaleBitmap(decodedByte,data.optInt("printerDpi",203),data.optInt("printerWidthMM",60));
+			int width = decodedByte.getWidth(), height = decodedByte.getHeight();
+			StringBuilder textToPrint = new StringBuilder();
+			for(int y = 0; y < height; y += 256) {
+                Bitmap bitmap = Bitmap.createBitmap(decodedByte, 0, y, width, (y + 256 >= height) ? height - y : 256);
+                textToPrint.append("[L]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>\n");
+            }
+            printer.printFormattedText(data.getString("text"), dotsFeedPaper);
+           
+            callbackContext.success();
+        } catch (EscPosConnectionException e) {
+            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                put("error", e.getMessage());
+            }}));
+        } catch (Exception e) {
+            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                put("error", e.getMessage());
+            }}));
+        }
+    }
 
     private void printFormattedText(CallbackContext callbackContext, String action, JSONObject data) throws JSONException {
         EscPosPrinter printer = this.getPrinter(callbackContext, data);
@@ -363,4 +393,19 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         }
         return true;
     }
+	
+	private Bitmap scaleBitmap(Bitmap bm,int dpi, int paperMM) {
+		int width = bm.getWidth();
+		int height = bm.getHeight();
+		int newWidth = dpi * (paperMM / 10) / 2.54;
+		//Log.v("Pictures", "Width and height are " + width + "--" + height);
+		float ratio = newWidth / width;
+		
+		int newHeight = (int) (height * ratio);
+
+		//Log.v("Pictures", "after scaling Width and height are " + width + "--" + height);
+
+		bm = Bitmap.createScaledBitmap(bm, newWidth, newHeight, true);
+		return bm;
+	}
 }
