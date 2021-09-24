@@ -212,17 +212,17 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
             decodedByte =   toGrayscale(decodedByte);
 			int width = decodedByte.getWidth(), height = decodedByte.getHeight();
 			StringBuilder textToPrint = new StringBuilder();
-			int maxHeight = data.optInt("maxImageHeight", 100);
+			int maxHeight = data.optInt("maxImageHeight", 256);
 			for(int y = 0; y < height; y += maxHeight) {
                 Bitmap bitmap = Bitmap.createBitmap(decodedByte, 0, y, width, (y + maxHeight >= height) ? height - y : maxHeight);
-                printer.printFormattedText("[L]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>");
+                printer.printFormattedText("[L]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>",1);
             }
-            printer.printFormattedText("/n", dotsFeedPaper);
+         //   printer.printFormattedText("\n", dotsFeedPaper);
 
             callbackContext.success();
         } catch (EscPosConnectionException e) {
             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
-                put("error", e.getMessage());
+                 put("error", e.getMessage());
             }}));
         } catch (Exception e) {
             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
@@ -405,7 +405,8 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
 	private Bitmap scaleBitmap(Bitmap bm,int dpi, double paperMM) {
 		int width = bm.getWidth();
 		int height = bm.getHeight();
-		int newWidth =(int) (dpi * ((paperMM -10 )/ 10) / 2.54);
+		int newWidth =(int) (dpi * ((paperMM - 5 )/ 10) / 2.54);
+        //int newWidth =(int) (dpi * (paperMM / 10) / 2.54);
 		//Log.v("Pictures", "Width and height are " + width + "--" + height);
 		double ratio = (double) newWidth / (double) width;
 		
