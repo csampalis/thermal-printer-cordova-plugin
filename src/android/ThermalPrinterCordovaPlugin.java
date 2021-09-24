@@ -218,7 +218,7 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
                 printer.printFormattedText("[L]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>",1);
             }
          //   printer.printFormattedText("\n", dotsFeedPaper);
-
+			printer.disconnectPrinter();
             callbackContext.success();
         } catch (EscPosConnectionException e) {
             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
