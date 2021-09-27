@@ -11,12 +11,17 @@ import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
+import android.os.Environment;
 import android.util.Base64;
+import android.util.Log;
+
+import androidx.core.app.ActivityCompat;
 
 import com.dantsu.escposprinter.EscPosCharsetEncoding;
 import com.dantsu.escposprinter.EscPosPrinter;
@@ -36,6 +41,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -202,24 +209,37 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
 	 private void printImage(CallbackContext callbackContext, String action, JSONObject data) throws JSONException {
         EscPosPrinter printer = this.getPrinter(callbackContext, data);
         try {
-            int dotsFeedPaper = data.has("mmFeedPaper")
-                ? printer.mmToPx((float) data.getDouble("mmFeedPaper"))
-                : data.optInt("dotsFeedPaper", 20);
-           
-		    byte[] decodedString = Base64.decode(data.optString("text"), Base64.DEFAULT);
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-			decodedByte = scaleBitmap(decodedByte,data.optInt("printerDpi",203),data.optDouble("printerWidthMM",60));
-            decodedByte =   toGrayscale(decodedByte);
-			int width = decodedByte.getWidth(), height = decodedByte.getHeight();
-			StringBuilder textToPrint = new StringBuilder();
-			int maxHeight = data.optInt("maxImageHeight", 256);
-			for(int y = 0; y < height; y += maxHeight) {
-                Bitmap bitmap = Bitmap.createBitmap(decodedByte, 0, y, width, (y + maxHeight >= height) ? height - y : maxHeight);
-                printer.printFormattedText("[L]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>",1);
+            boolean isQrCode = data.has("isQrCode") && data.optBoolean("isQrCode",false);
+            if(isQrCode){
+                printQrCode(callbackContext,action,data);
+            } else {
+
+
+                int dotsFeedPaper = data.has("mmFeedPaper")
+                        ? printer.mmToPx((float) data.getDouble("mmFeedPaper"))
+                        : data.optInt("dotsFeedPaper", 20);
+
+                String alignment = data.has("alignment")
+                        ?data.optString("alignment","L")
+                        :"L";
+
+                byte[] decodedString = Base64.decode(data.optString("text"), Base64.DEFAULT);
+                Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                decodedByte = scaleBitmap(decodedByte, data);
+                decodedByte = toGrayscale(decodedByte);
+                int width = decodedByte.getWidth(), height = decodedByte.getHeight();
+                StringBuilder textToPrint = new StringBuilder();
+                int maxHeight = data.optInt("maxImageHeight", 256);
+                for (int y = 0; y < height; y += maxHeight) {
+                    Bitmap bitmap = Bitmap.createBitmap(decodedByte, 0, y, width, (y + maxHeight >= height) ? height - y : maxHeight);
+                    int dotsAtEnd = (y + maxHeight >= height)?dotsFeedPaper:1;
+                    printer.printFormattedText("["+alignment+"]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, bitmap) + "</img>\n", dotsAtEnd);
+                }
+                //   printer.printFormattedText("\n", dotsFeedPaper);
+                printer.disconnectPrinter();
+                callbackContext.success();
             }
-         //   printer.printFormattedText("\n", dotsFeedPaper);
-			printer.disconnectPrinter();
-            callbackContext.success();
+
         } catch (EscPosConnectionException e) {
             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
                  put("error", e.getMessage());
@@ -228,6 +248,40 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
             callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
                 put("error", e.getMessage());
             }}));
+        }
+    }
+
+    private void printQrCode(CallbackContext callbackContext, String action, JSONObject data) throws JSONException {
+        EscPosPrinter printer = this.getPrinter(callbackContext, data);
+        try {
+            int sizeQR = data.has("qrSize")
+                    ?data.optInt("qrSize",25)
+                    :25;
+            String alignment = data.has("alignment")
+                    ?data.optString("alignment","C")
+                    :"C";
+            printer.printFormattedText("["+alignment+"]<qrcode size='"+sizeQR+"'>" + data.optString("text") + "</qrcode>\n", 1);
+            printer.disconnectPrinter();
+            callbackContext.success();
+        } catch (EscPosConnectionException e) {
+            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                put("error", e.getMessage());
+            }}));
+        } catch (Exception e) {
+            callbackContext.error(new JSONObject(new HashMap<String, Object>() {{
+                put("error", e.getMessage());
+            }}));
+        }
+    }
+
+    private void createPngFile(Bitmap bmp) {
+        ActivityCompat.requestPermissions(this.cordova.getActivity(), new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+        String filename = Environment.getExternalStorageDirectory()+"/myPdfTemp123.png";
+        try (FileOutputStream out = new FileOutputStream(filename)) {
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, out); // bmp is your Bitmap instance
+            // PNG is a lossless format, the compression factor (100) is ignored
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -402,7 +456,14 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         return true;
     }
 	
-	private Bitmap scaleBitmap(Bitmap bm,int dpi, double paperMM) {
+	private Bitmap scaleBitmap(Bitmap bm,JSONObject data) {
+        int dpi =data.has("printerDpi")
+                ?data.optInt("printerDpi", 203)
+                 :203;
+        double paperMM = data.has("maxWidth")
+                ?data.optDouble("maxWidth", 25)
+                :data.optDouble("printerWidthMM", 60);
+
 		int width = bm.getWidth();
 		int height = bm.getHeight();
 		int newWidth =(int) (dpi * ((paperMM - 5 )/ 10) / 2.54);
@@ -431,10 +492,11 @@ public class ThermalPrinterCordovaPlugin extends CordovaPlugin {
         cm.setSaturation(0);
         ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
         paint.setColorFilter(f);
+        if(bmpOriginal.hasAlpha())
+            c.drawColor(Color.WHITE);
         c.drawBitmap(bmpOriginal, 0, 0, paint);
         return bmpGrayscale;
     }
-
 
 
 }
